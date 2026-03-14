@@ -1,0 +1,17 @@
+services:
+  tweenforge:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "9817:9817"
+    environment:
+      - TWEENFORGE_DEVICE=cpu
+    # For GPU support, uncomment:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]

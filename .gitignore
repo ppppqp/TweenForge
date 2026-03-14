@@ -1,0 +1,35 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+.env
+*.so
+*.dylib
+
+# Model weights (downloaded at runtime)
+*.pkl
+*.pth
+*.onnx
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / coverage
+.pytest_cache/
+htmlcov/
+.coverage
+
+# TweenForge temp files
+.tweenforge/
