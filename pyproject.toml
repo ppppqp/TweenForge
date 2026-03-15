@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "tweenforge"
 version = "0.1.0"
-description = "AI-powered inbetween frame generator for Clip Studio Paint animators"
+description = "AI-powered inbetween frame generator for 2D animation"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -23,6 +23,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+companion = [
+    "pynput>=1.7.6",
+    "pyautogui>=0.9.54",
+]
 cloud = [
     "boto3>=1.34.0",
     "gunicorn>=21.2.0",

@@ -107,5 +107,41 @@ def generate(frame_a: str, frame_b: str, num: int, easing: str, output_dir: str,
     logger.info("Done. Generated %d frame(s) in %s", len(frames), out)
 
 
+@main.command()
+@click.option("-n", "--num", default=3, type=int, help="Number of inbetweens to generate")
+@click.option("-e", "--easing", default="ease_in_out", type=click.Choice(["linear", "ease_in", "ease_out", "ease_in_out"]))
+@click.option("--lineart", is_flag=True, help="Apply line art post-processing")
+@click.option("--server", default="http://127.0.0.1:9817", help="TweenForge server URL")
+@click.option("--hotkey", default="<ctrl>+<shift>+t", help="Global hotkey combo (pynput format)")
+def companion(num: int, easing: str, lineart: bool, server: str, hotkey: str):
+    """Run the hotkey companion daemon alongside your drawing app.
+
+    \b
+    Workflow:
+      1. Focus your drawing app, navigate to start frame
+      2. Press the hotkey (default: Ctrl+Shift+T) → captures Frame A
+      3. Navigate to end frame
+      4. Press the hotkey again → captures Frame B, generates inbetweens
+      5. Preview popup appears → accept to auto-import, or discard
+    \b
+    Requires the TweenForge server to be running (tweenforge serve).
+    """
+    from tweenforge.daemon.app import CompanionDaemon
+
+    daemon = CompanionDaemon(
+        server_url=server,
+        hotkey=hotkey,
+        num_inbetweens=num,
+        easing=easing,
+        lineart_mode=lineart,
+    )
+
+    logger.info("Starting TweenForge Companion Daemon...")
+    logger.info("Make sure 'tweenforge serve' is running in another terminal.")
+    logger.info("")
+
+    daemon.start()
+
+
 if __name__ == "__main__":
     main()

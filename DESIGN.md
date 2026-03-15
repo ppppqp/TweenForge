@@ -214,6 +214,38 @@ The web companion sidesteps all of these. An experimental Photoshop UXP plugin i
 
 **CLI fallback** also works without any UI: `tweenforge generate frameA.png frameB.png -n 3`
 
+### Hotkey Companion Daemon (`tweenforge companion`)
+
+For the tightest integration with CSP (or any drawing app), the companion daemon
+automates the export/import round-trip using **clipboard capture** and **keyboard simulation**.
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                         Companion Daemon Workflow                     │
+│                                                                      │
+│  1. Focus CSP     2. Navigate to     3. Preview      4. Auto-import │
+│     Press hotkey     end frame          popup           via paste    │
+│     → Frame A        Press hotkey       Accept or       Navigate +  │
+│       captured       → Frame B          Discard         Ctrl+V      │
+│       via clipboard    captured                         per frame   │
+│                        → generate                                   │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+How it works under the hood:
+
+| Step | What happens | Mechanism |
+|---|---|---|
+| Capture Frame A | Simulates `Cmd+Shift+C` (Copy Merged) in CSP, reads clipboard | `pyautogui` + `PIL.ImageGrab` |
+| Capture Frame B | Same as above | Same |
+| Generate | Uploads both frames to the TweenForge server | `httpx` POST to `/interpolate/upload` |
+| Preview | Tkinter popup with thumbnail strip + playback + accept/reject | `tkinter` |
+| Auto-import | For each generated frame: copy to clipboard → navigate timeline → paste | `osascript` (macOS) / `xclip` (Linux) + `pyautogui` |
+
+**Key limitation:** The paste import creates a new raster layer, not a native animation cel. The animator may need to convert it. This is a CSP limitation — there's no way to programmatically create animation cels from outside the app.
+
+**Requirements:** `pip install tweenforge[companion]` (installs `pynput` + `pyautogui`)
+
 ---
 
 ## Data Flow
@@ -280,6 +312,10 @@ tweenforge/
 │   │   ├── schemas.py                  # Pydantic request/response models
 │   │   └── static/
 │   │       └── index.html              # Web companion UI (drag-drop, preview, download)
+│   ├── daemon/                         # Hotkey companion daemon
+│   │   ├── app.py                      # State machine + workflow orchestrator
+│   │   ├── capture.py                  # Clipboard capture + paste (OS-level)
+│   │   └── preview.py                  # Tkinter preview popup
 │   ├── client/                         # Programmatic client SDK
 │   │   ├── adapter.py                  # HostAdapter ABC for native integrations
 │   │   ├── session.py                  # Workflow state machine

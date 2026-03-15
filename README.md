@@ -4,13 +4,13 @@ AI-powered inbetween frame generator for 2D animation.
 
 TweenForge takes two key frames and generates smooth intermediate frames using [RIFE](https://github.com/hzwer/Practical-RIFE) (Real-Time Intermediate Flow Estimation). It works with **any drawing app** — Clip Studio Paint, Photoshop, Krita, Procreate, or anything else that can export PNGs.
 
-## How It Works
+## Three Ways to Use It
 
-1. Export two key frames from your drawing app as PNGs
-2. Open `http://localhost:9817` in your browser
-3. Drag-and-drop the PNGs, pick settings, click Generate
-4. Preview the result with inline playback
-5. Download the generated frames and import back into your app
+**Web UI** — drag-and-drop PNGs in your browser, preview, download results
+
+**Companion daemon** — press a hotkey in CSP, it captures your canvas, generates inbetweens, and pastes them back automatically
+
+**CLI** — `tweenforge generate frameA.png frameB.png -n 3`
 
 ## Quick Start
 
@@ -33,6 +33,26 @@ tweenforge serve
 ```
 
 Then open [http://localhost:9817](http://localhost:9817) in your browser.
+
+### Hotkey Companion (tightest CSP integration)
+
+```bash
+# Install companion dependencies
+pip install -e ".[companion]"
+
+# Terminal 1: start the server
+tweenforge serve
+
+# Terminal 2: start the companion daemon
+tweenforge companion -n 3 -e ease_in_out --lineart
+```
+
+Then in CSP:
+1. Navigate to your start key frame
+2. Press `Ctrl+Shift+T` — captures Frame A via clipboard
+3. Navigate to your end key frame
+4. Press `Ctrl+Shift+T` again — captures Frame B, generates inbetweens
+5. Preview popup appears — accept to auto-paste into timeline, or discard
 
 ### CLI (no browser needed)
 
