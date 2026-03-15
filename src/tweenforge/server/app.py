@@ -3,6 +3,7 @@
 Native mode:  POST /interpolate          — reads/writes files on disk
               POST /interpolate/preview   — same but returns thumbnails for UI preview
 Cloud mode:   POST /interpolate/upload    — accepts multipart uploads, returns base64 PNGs
+Web UI:       GET  /                      — companion web app (upload, preview, download)
 Health:       GET  /health
 """
 
@@ -15,6 +16,8 @@ from pathlib import Path
 
 import numpy as np
 from fastapi import FastAPI, File, Form, UploadFile
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from tweenforge import __version__
@@ -37,6 +40,18 @@ from tweenforge.server.schemas import (
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="TweenForge", version=__version__)
+
+# ---------------------------------------------------------------------------
+# Web companion UI — served at /
+# ---------------------------------------------------------------------------
+
+_STATIC_DIR = Path(__file__).parent / "static"
+
+
+@app.get("/")
+async def web_ui():
+    return FileResponse(_STATIC_DIR / "index.html")
+
 
 # Lazy-initialized singletons
 _config: TweenForgeConfig | None = None

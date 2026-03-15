@@ -1,24 +1,40 @@
 # TweenForge
 
-AI-powered inbetween frame generator for 2D animation in Clip Studio Paint.
+AI-powered inbetween frame generator for 2D animation.
 
-TweenForge takes two key frames and generates smooth intermediate frames using [RIFE](https://github.com/hzwer/Practical-RIFE) (Real-Time Intermediate Flow Estimation). It runs as a local server that the CSP plugin talks to, or as a cloud service for animators without GPUs.
+TweenForge takes two key frames and generates smooth intermediate frames using [RIFE](https://github.com/hzwer/Practical-RIFE) (Real-Time Intermediate Flow Estimation). It works with **any drawing app** — Clip Studio Paint, Photoshop, Krita, Procreate, or anything else that can export PNGs.
+
+## How It Works
+
+1. Export two key frames from your drawing app as PNGs
+2. Open `http://localhost:9817` in your browser
+3. Drag-and-drop the PNGs, pick settings, click Generate
+4. Preview the result with inline playback
+5. Download the generated frames and import back into your app
 
 ## Quick Start
 
 ### Install
 
 ```bash
-# Clone and install
-git clone https://github.com/yourname/tweenforge.git
-cd tweenforge
+git clone https://github.com/ppppqp/TweenForge.git
+cd TweenForge
 pip install -e ".[dev]"
 
 # Download RIFE model weights (~30MB)
 tweenforge setup
 ```
 
-### Use from CLI (no CSP needed)
+### Web UI (recommended)
+
+```bash
+# Start the server — opens web UI at http://localhost:9817
+tweenforge serve
+```
+
+Then open [http://localhost:9817](http://localhost:9817) in your browser.
+
+### CLI (no browser needed)
 
 ```bash
 # Generate 3 inbetweens between two key frames
@@ -28,36 +44,31 @@ tweenforge generate keyframe_01.png keyframe_05.png -n 3 -e ease_in_out -o ./out
 tweenforge generate keyframe_01.png keyframe_05.png -n 3 --lineart -o ./output
 ```
 
-### Use with Clip Studio Paint
+### Cloud Deployment
 
 ```bash
-# 1. Start the server
-tweenforge serve
-
-# 2. In CSP: File > Script > Run Script... > select csp_plugin/tweenforge.js
-# 3. Follow the prompts to select frames and generate inbetweens
-```
-
-### Use via Cloud
-
-```bash
-# Deploy with Docker
 cd docker
 docker compose up -d
-
-# Or call the cloud endpoint directly
-curl -X POST https://your-server:9817/interpolate/upload \
-  -F "frame_a=@keyframe_01.png" \
-  -F "frame_b=@keyframe_05.png" \
-  -F "num_inbetweens=3" \
-  -F "easing=ease_in_out"
+# Web UI available at http://your-server:9817
 ```
 
 ## API
 
+### `POST /interpolate/upload`
+
+Multipart upload — used by the web UI and remote clients.
+
+- `frame_a`: PNG file
+- `frame_b`: PNG file
+- `num_inbetweens`: integer (1-24)
+- `easing`: `linear` | `ease_in` | `ease_out` | `ease_in_out`
+- `lineart_mode`: `true` | `false`
+
+Returns base64-encoded PNGs in the response.
+
 ### `POST /interpolate` (native mode)
 
-For local use — reads and writes files on disk.
+For local file-path-based workflows (CLI, scripts).
 
 ```json
 {
@@ -70,21 +81,9 @@ For local use — reads and writes files on disk.
 }
 ```
 
-### `POST /interpolate/upload` (cloud mode)
-
-Multipart upload — for remote use.
-
-- `frame_a`: PNG file
-- `frame_b`: PNG file
-- `num_inbetweens`: integer (1-24)
-- `easing`: `linear` | `ease_in` | `ease_out` | `ease_in_out`
-- `lineart_mode`: `true` | `false`
-
-Returns base64-encoded PNGs in the response.
-
 ### `GET /health`
 
-Server status and configuration.
+Server status, device info, and model status.
 
 ## Development
 

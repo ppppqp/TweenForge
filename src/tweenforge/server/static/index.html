@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TweenForge</title>
+<style>
+  :root {
+    --bg: #1e1e1e;
+    --bg-card: #2a2a2a;
+    --bg-hover: #353535;
+    --text: #e0e0e0;
+    --text-muted: #888;
+    --accent: #5b9bd5;
+    --accent-hover: #4a8bc4;
+    --error: #d55b5b;
+    --success: #5bd565;
+    --border: #3a3a3a;
+    --radius: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 540px;
+  }
+
+  /* -- Header -- */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header h1 { font-size: 18px; font-weight: 700; }
+  .header .subtitle { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .status-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--text-muted);
+  }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--error);
+  }
+  .status-dot.connected { background: var(--success); }
+
+  /* -- Sections -- */
+  .section {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .section-title {
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+
+  /* -- Drop zones -- */
+  .drop-row {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+  }
+  .drop-zone {
+    flex: 1;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 16px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(91,155,213,0.05);
+  }
+  .drop-zone.loaded {
+    border-color: var(--success);
+    border-style: solid;
+    padding: 4px;
+  }
+  .drop-zone .label {
+    font-size: 11px; color: var(--text-muted);
+    margin-bottom: 6px; font-weight: 600;
+  }
+  .drop-zone .hint {
+    font-size: 10px; color: var(--text-muted); opacity: 0.7;
+  }
+  .drop-zone img {
+    max-width: 100%; max-height: 100px;
+    object-fit: contain; border-radius: 4px;
+  }
+  .drop-zone input[type="file"] {
+    position: absolute; inset: 0;
+    opacity: 0; cursor: pointer;
+  }
+  .drop-arrow {
+    color: var(--text-muted); font-size: 20px;
+    display: flex; align-items: center;
+  }
+
+  /* -- Settings -- */
+  .settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .setting-item label {
+    display: block;
+    font-size: 10px; color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .setting-item select,
+  .setting-item input[type="number"] {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+  }
+  .setting-item select:focus,
+  .setting-item input:focus {
+    outline: none; border-color: var(--accent);
+  }
+  .checkbox-item {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 8px;
+    padding-top: 4px;
+  }
+  .checkbox-item input[type="checkbox"] { accent-color: var(--accent); }
+  .checkbox-item label { font-size: 12px; color: var(--text); margin: 0; }
+
+  /* -- Buttons -- */
+  .btn-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .btn {
+    flex: 1; padding: 10px 16px;
+    border: none; border-radius: 6px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-secondary { background: var(--bg-hover); color: var(--text); }
+  .btn-secondary:hover:not(:disabled) { background: #444; }
+  .btn-success { background: var(--success); color: #1a1a1a; }
+  .btn-success:hover:not(:disabled) { background: #4cc44f; }
+
+  /* -- Progress -- */
+  .progress-bar {
+    height: 4px; background: var(--bg);
+    border-radius: 2px; margin: 10px 0;
+    overflow: hidden; display: none;
+  }
+  .progress-bar.active { display: block; }
+  .progress-bar .fill {
+    height: 100%; background: var(--accent);
+    border-radius: 2px; width: 0%;
+    transition: width 0.3s ease;
+  }
+  .status-text {
+    font-size: 11px; color: var(--text-muted);
+    text-align: center; min-height: 16px;
+  }
+
+  /* -- Preview -- */
+  .preview-strip {
+    display: flex; gap: 6px;
+    overflow-x: auto; padding: 8px 0;
+    min-height: 90px; align-items: center;
+  }
+  .preview-frame {
+    flex-shrink: 0; width: 72px; text-align: center;
+  }
+  .preview-frame img {
+    width: 72px; height: 72px;
+    object-fit: contain; background: #111;
+    border-radius: 6px;
+    border: 2px solid transparent;
+    transition: opacity 0.15s;
+  }
+  .preview-frame.key img { border-color: var(--accent); }
+  .preview-frame.generated img { border-color: var(--success); }
+  .preview-frame .frame-label {
+    font-size: 9px; color: var(--text-muted); margin-top: 3px;
+  }
+
+  /* -- Playback -- */
+  .playback-controls {
+    display: flex; align-items: center;
+    justify-content: center; gap: 8px;
+    padding: 8px 0;
+  }
+  .playback-btn {
+    width: 32px; height: 32px;
+    border: none; border-radius: 50%;
+    background: var(--bg-hover); color: var(--text);
+    font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .playback-btn:hover { background: #444; }
+
+  /* -- Download -- */
+  .download-list {
+    display: flex; flex-direction: column; gap: 4px;
+    max-height: 150px; overflow-y: auto;
+  }
+  .download-item {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: var(--bg);
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .download-item a {
+    color: var(--accent); text-decoration: none;
+    font-weight: 600;
+  }
+  .download-item a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>TweenForge</h1>
+      <div class="subtitle">AI-powered inbetween frame generator</div>
+    </div>
+    <div class="status-badge">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusLabel">Checking...</span>
+    </div>
+  </div>
+
+  <!-- Frame Upload -->
+  <div class="section">
+    <div class="section-title">Key Frames</div>
+    <div class="drop-row">
+      <div class="drop-zone" id="dropA" onclick="document.getElementById('fileA').click()">
+        <div class="label">Frame A (Start)</div>
+        <div class="hint">Click or drag PNG here</div>
+        <input type="file" id="fileA" accept="image/png,image/jpeg,image/webp" />
+      </div>
+      <div class="drop-arrow">&rarr;</div>
+      <div class="drop-zone" id="dropB" onclick="document.getElementById('fileB').click()">
+        <div class="label">Frame B (End)</div>
+        <div class="hint">Click or drag PNG here</div>
+        <input type="file" id="fileB" accept="image/png,image/jpeg,image/webp" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="section">
+    <div class="section-title">Settings</div>
+    <div class="settings-grid">
+      <div class="setting-item">
+        <label>Inbetweens</label>
+        <input type="number" id="numInbetweens" min="1" max="24" value="3" />
+      </div>
+      <div class="setting-item">
+        <label>Easing</label>
+        <select id="easing">
+          <option value="linear">Linear</option>
+          <option value="ease_in">Ease In (Slow Start)</option>
+          <option value="ease_out">Ease Out (Slow End)</option>
+          <option value="ease_in_out" selected>Ease In-Out</option>
+        </select>
+      </div>
+      <div class="checkbox-item">
+        <input type="checkbox" id="lineartMode" />
+        <label for="lineartMode">Line art cleanup (binarize + denoise)</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generate -->
+  <div class="btn-row">
+    <button class="btn btn-primary" id="btnGenerate" onclick="onGenerate()" disabled>
+      Generate Preview
+    </button>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-bar" id="progressBar">
+    <div class="fill" id="progressFill"></div>
+  </div>
+  <div class="status-text" id="statusText">Upload two key frames to begin</div>
+
+  <!-- Preview -->
+  <div class="section" id="previewSection" style="display:none;">
+    <div class="section-title">Preview</div>
+    <div class="preview-strip" id="previewStrip"></div>
+
+    <div class="playback-controls">
+      <button class="playback-btn" onclick="playbackPrev()" title="Previous">&#9664;</button>
+      <button class="playback-btn" id="btnPlay" onclick="playbackToggle()" title="Play/Pause">&#9654;</button>
+      <button class="playback-btn" onclick="playbackNext()" title="Next">&#9654;</button>
+    </div>
+
+    <!-- Download individual frames -->
+    <div class="section-title" style="margin-top:8px;">Download</div>
+    <div class="download-list" id="downloadList"></div>
+
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="btn btn-success" id="btnDownloadAll" onclick="onDownloadAll()">
+        Download All (.zip)
+      </button>
+      <button class="btn btn-secondary" id="btnDiscard" onclick="onDiscard()">
+        Discard
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// =========================================================================
+// TweenForge Web Companion
+//
+// Workflow: upload two PNGs → generate inbetweens → preview → download
+// Works with any drawing app (CSP, Photoshop, Krita, Procreate, etc.)
+// =========================================================================
+
+var serverUrl = window.location.origin;
+var fileA = null;  // File object
+var fileB = null;
+var previewData = null;
+var playbackTimer = null;
+var playbackIndex = 0;
+var allPreviewImages = [];
+
+// -- File upload ----------------------------------------------------------
+
+function setupDropZone(zoneId, inputId, which) {
+  var zone = document.getElementById(zoneId);
+  var input = document.getElementById(inputId);
+
+  input.addEventListener("change", function(e) {
+    var file = e.target.files[0];
+    if (file) setFrame(which, file, zone);
+  });
+
+  zone.addEventListener("dragover", function(e) {
+    e.preventDefault();
+    zone.classList.add("dragover");
+  });
+  zone.addEventListener("dragleave", function() {
+    zone.classList.remove("dragover");
+  });
+  zone.addEventListener("drop", function(e) {
+    e.preventDefault();
+    zone.classList.remove("dragover");
+    var file = e.dataTransfer.files[0];
+    if (file) setFrame(which, file, zone);
+  });
+}
+
+function setFrame(which, file, zone) {
+  if (which === "A") fileA = file;
+  else fileB = file;
+
+  // Show thumbnail in the drop zone
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    zone.classList.add("loaded");
+    zone.innerHTML =
+      '<div class="label">Frame ' + which + '</div>' +
+      '<img src="' + e.target.result + '" />' +
+      '<div class="hint" style="margin-top:4px;">' + file.name + '</div>' +
+      '<input type="file" id="file' + which + '" accept="image/png,image/jpeg,image/webp" />';
+    // Re-bind the new input
+    setupDropZone(
+      which === "A" ? "dropA" : "dropB",
+      "file" + which,
+      which
+    );
+  };
+  reader.readAsDataURL(file);
+
+  updateGenerateButton();
+}
+
+function updateGenerateButton() {
+  document.getElementById("btnGenerate").disabled = !(fileA && fileB);
+  if (fileA && fileB) {
+    document.getElementById("statusText").textContent = "Ready to generate";
+  }
+}
+
+// -- Server ---------------------------------------------------------------
+
+function checkServer() {
+  fetch(serverUrl + "/health")
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      document.getElementById("statusDot").classList.add("connected");
+      document.getElementById("statusLabel").textContent = data.device;
+    })
+    .catch(function() {
+      document.getElementById("statusDot").classList.remove("connected");
+      document.getElementById("statusLabel").textContent = "Disconnected";
+    });
+}
+
+function setProgress(pct, msg) {
+  var bar = document.getElementById("progressBar");
+  var fill = document.getElementById("progressFill");
+  var text = document.getElementById("statusText");
+  if (pct > 0) {
+    bar.classList.add("active");
+    fill.style.width = (pct * 100) + "%";
+  } else {
+    bar.classList.remove("active");
+    fill.style.width = "0%";
+  }
+  text.textContent = msg || "";
+}
+
+// -- Generate -------------------------------------------------------------
+
+function onGenerate() {
+  if (!fileA || !fileB) return;
+
+  var numInbetweens = parseInt(document.getElementById("numInbetweens").value, 10);
+  var easing = document.getElementById("easing").value;
+  var lineartMode = document.getElementById("lineartMode").checked;
+
+  document.getElementById("btnGenerate").disabled = true;
+  setProgress(0.2, "Uploading frames...");
+
+  var formData = new FormData();
+  formData.append("frame_a", fileA);
+  formData.append("frame_b", fileB);
+  formData.append("num_inbetweens", numInbetweens);
+  formData.append("easing", easing);
+  formData.append("lineart_mode", lineartMode);
+
+  setProgress(0.4, "Generating inbetweens...");
+
+  fetch(serverUrl + "/interpolate/upload", {
+    method: "POST",
+    body: formData,
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.status !== "complete") {
+        throw new Error(data.error || "Generation failed");
+      }
+      previewData = data;
+      renderPreview(data);
+      setProgress(0, "");
+      document.getElementById("previewSection").style.display = "block";
+      document.getElementById("btnGenerate").disabled = false;
+      document.getElementById("btnGenerate").textContent = "Regenerate";
+    })
+    .catch(function(err) {
+      setProgress(0, "Error: " + err.message);
+      document.getElementById("btnGenerate").disabled = false;
+    });
+}
+
+// -- Preview --------------------------------------------------------------
+
+function renderPreview(data) {
+  var strip = document.getElementById("previewStrip");
+  var downloads = document.getElementById("downloadList");
+  strip.innerHTML = "";
+  downloads.innerHTML = "";
+  allPreviewImages = [];
+
+  // Key frame A thumbnail (from the uploaded file)
+  var readerA = new FileReader();
+  readerA.onload = function(e) {
+    var divA = makePreviewThumb(e.target.result, "Key A", "key", true);
+    strip.insertBefore(divA, strip.firstChild);
+    allPreviewImages.unshift(e.target.result);
+  };
+  readerA.readAsDataURL(fileA);
+
+  // Generated frames
+  for (var i = 0; i < data.frames_base64.length; i++) {
+    var src = "data:image/png;base64," + data.frames_base64[i];
+    var div = makePreviewThumb(src, "tw " + (i + 1), "generated", true);
+    strip.appendChild(div);
+    allPreviewImages.push(src);
+
+    // Download link
+    var item = document.createElement("div");
+    item.className = "download-item";
+    item.innerHTML =
+      '<span>inbetween_' + String(i).padStart(3, "0") + '.png</span>' +
+      '<a href="' + src + '" download="inbetween_' + String(i).padStart(3, "0") + '.png">Save</a>';
+    downloads.appendChild(item);
+  }
+
+  // Key frame B thumbnail
+  var readerB = new FileReader();
+  readerB.onload = function(e) {
+    var divB = makePreviewThumb(e.target.result, "Key B", "key", true);
+    strip.appendChild(divB);
+    allPreviewImages.push(e.target.result);
+  };
+  readerB.readAsDataURL(fileB);
+}
+
+function makePreviewThumb(src, label, cssClass, isDataUrl) {
+  var div = document.createElement("div");
+  div.className = "preview-frame " + cssClass;
+
+  var img = document.createElement("img");
+  img.src = src;
+  div.appendChild(img);
+
+  var lbl = document.createElement("div");
+  lbl.className = "frame-label";
+  lbl.textContent = label;
+  div.appendChild(lbl);
+
+  return div;
+}
+
+// -- Playback -------------------------------------------------------------
+
+function playbackToggle() {
+  if (playbackTimer) {
+    clearInterval(playbackTimer);
+    playbackTimer = null;
+    document.getElementById("btnPlay").innerHTML = "&#9654;";
+    // Reset all frames to full opacity
+    var frames = document.querySelectorAll(".preview-frame");
+    for (var i = 0; i < frames.length; i++) frames[i].style.opacity = "1";
+  } else {
+    playbackIndex = 0;
+    highlightFrame(0);
+    playbackTimer = setInterval(function() {
+      playbackIndex = (playbackIndex + 1) % allPreviewImages.length;
+      highlightFrame(playbackIndex);
+    }, 120);
+    document.getElementById("btnPlay").innerHTML = "&#9646;&#9646;";
+  }
+}
+
+function playbackPrev() {
+  if (!allPreviewImages.length) return;
+  playbackIndex = (playbackIndex - 1 + allPreviewImages.length) % allPreviewImages.length;
+  highlightFrame(playbackIndex);
+}
+
+function playbackNext() {
+  if (!allPreviewImages.length) return;
+  playbackIndex = (playbackIndex + 1) % allPreviewImages.length;
+  highlightFrame(playbackIndex);
+}
+
+function highlightFrame(idx) {
+  var frames = document.querySelectorAll(".preview-frame");
+  for (var i = 0; i < frames.length; i++) {
+    frames[i].style.opacity = (i === idx) ? "1" : "0.3";
+  }
+}
+
+// -- Download all ---------------------------------------------------------
+
+function onDownloadAll() {
+  if (!previewData) return;
+  // Download each frame individually (zip would require a library)
+  for (var i = 0; i < previewData.frames_base64.length; i++) {
+    var a = document.createElement("a");
+    a.href = "data:image/png;base64," + previewData.frames_base64[i];
+    a.download = "inbetween_" + String(i).padStart(3, "0") + ".png";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+}
+
+function onDiscard() {
+  previewData = null;
+  document.getElementById("previewSection").style.display = "none";
+  document.getElementById("btnGenerate").textContent = "Generate Preview";
+  setProgress(0, "Upload two key frames to begin");
+  if (playbackTimer) { clearInterval(playbackTimer); playbackTimer = null; }
+}
+
+// -- Init -----------------------------------------------------------------
+
+setupDropZone("dropA", "fileA", "A");
+setupDropZone("dropB", "fileB", "B");
+checkServer();
+setInterval(checkServer, 10000);
+</script>
+
+</body>
+</html>
