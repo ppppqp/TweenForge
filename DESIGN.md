@@ -2,9 +2,9 @@
 
 ## Overview
 
-TweenForge is an AI-powered tool that generates inbetween frames for 2D animation in Clip Studio Paint (CSP). It takes two key frames drawn by an animator and produces smooth intermediate frames, drastically reducing the manual labor of inbetweening.
+TweenForge is an AI-powered tool that generates inbetween frames for 2D animation. It takes two key frames drawn by an animator and produces smooth intermediate frames, drastically reducing the manual labor of inbetweening.
 
-The system runs as a **local HTTP server** (native mode) or a **cloud-hosted service** (cloud mode), with a lightweight JavaScript plugin inside CSP that acts as the bridge.
+The system runs as a **local HTTP server** (native mode) or a **cloud-hosted service** (cloud mode). Host application plugins (Clip Studio Paint, Photoshop, etc.) share a common UI panel and communicate with the server through a standardized **HostBridge adapter interface**.
 
 ---
 
@@ -172,65 +172,128 @@ Animator's Machine                    Cloud Server
 
 ---
 
-## CSP Plugin Limitations and Workarounds
+## User Experience & Plugin Architecture
 
-Clip Studio Paint's scripting API (v2.x) is still maturing. Known limitations and our workarounds:
+### The UX Problem (and what we fixed)
+
+Early versions used `prompt()`/`alert()` dialogs — the worst possible UX for animators who work visually. The redesigned UX follows a **generate-preview-accept** workflow:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  SELECT         CONFIGURE         PREVIEW       IMPORT  │
+│                                                         │
+│  Pick start  →  Set count,    →  See all     →  One     │
+│  and end        easing,          frames with     click   │
+│  frames         lineart mode     playback        import  │
+│                                                         │
+│                     ↑                │                   │
+│                     └── adjust ──────┘                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+Key UX decisions:
+- **Nothing is imported until the user explicitly accepts.** Preview is non-destructive.
+- **Thumbnail strip** shows all frames (key frames + generated) in sequence so the animator can judge motion.
+- **Inline playback** loops through the frames at ~8fps so the animator sees actual motion, not static thumbnails.
+- **Adjust and regenerate** — if the result is bad, change settings and re-generate without leaving the panel.
+- **Progress feedback** — real progress bar and status text, not a spinning cursor.
+
+### HostBridge Adapter Pattern
+
+Every host application (CSP, Photoshop, future tools) implements the same JavaScript interface:
+
+```
+HostBridge {
+    getServerUrl()                    → string
+    getTempDir()                      → string
+    exportFrame(frameNum, outPath)    → Promise<string>
+    importFrame(imagePath, frameNum)  → Promise<void>
+    onReady()                         → void
+}
+```
+
+The **panel UI is shared** — a single `panel.html` with all layout, styles, and interaction logic. Each host adapter injects its `HostBridge` implementation before the panel loads. This means:
+
+1. **One UI to maintain** — visual changes propagate to all host apps automatically.
+2. **Adding a new host** requires only writing a new adapter (~100 lines) — no UI work.
+3. **The panel works standalone** (without a host) for debugging — it just skips the export/import calls.
+
+```
+csp_plugin/
+├── tweenforge.js       ← CSP-specific HostBridge (export via CSP API)
+└── panel.html          ← Shared UI (the single source of truth)
+
+photoshop_plugin/
+├── manifest.json       ← UXP plugin manifest
+├── index.js            ← Photoshop-specific HostBridge (export via UXP API)
+└── panel.html          ← Loads the shared panel.html
+```
+
+### Server Endpoints for the UX
+
+| Endpoint | Purpose | Used by |
+|---|---|---|
+| `POST /interpolate/preview` | Generate frames AND return thumbnails for the UI | Panel preview workflow |
+| `POST /interpolate` | Generate frames only (no thumbnails) | CLI, batch processing |
+| `POST /interpolate/upload` | Multipart upload → base64 response | Cloud mode |
+| `GET /health` | Status check with device info | Panel connection indicator |
+
+The `/interpolate/preview` endpoint is what enables the preview UX — it returns small base64 thumbnails alongside the full-resolution output files, so the panel can render the preview strip instantly without loading large images.
+
+---
+
+## Host Plugin Limitations and Workarounds
+
+### Clip Studio Paint
 
 | Limitation | Workaround |
 |---|---|
-| No programmatic PNG export API | Use `executeMenuCommand("file_export_png")` — may require manual save dialog interaction |
-| No direct animation cel creation API | Import as image layer, then manually assign to timeline cel |
-| No HTTP client in CSP JavaScript | Use `XMLHttpRequest` (available in CSP's JS runtime) |
-| Script UI limited to `prompt()`/`alert()` | Sufficient for MVP; future versions can use CSP's Dialog API |
-| Cannot detect current frame number programmatically in all cases | User specifies frame numbers via prompt |
+| No programmatic PNG export API | Use `doc.exportImage()` where available; fall back to `executeMenuCommand()` |
+| No direct animation cel creation API | Import as image layer, then assign to timeline cel |
+| HTML panel support varies by version | Fall back to CLI workflow for older CSP versions |
+| Cannot detect current frame number in all cases | User specifies frame numbers in panel inputs |
 
-**Fallback workflow (if scripting is too limited):** The user manually exports key frames as PNGs, runs `tweenforge generate frameA.png frameB.png -n 3`, and manually imports the results. The CLI works independently of CSP.
+### Photoshop
+
+| Limitation | Workaround |
+|---|---|
+| No native animation timeline in all editions | Use video timeline layers; fall back to layer-based workflow |
+| UXP panels can't load cross-origin scripts | Inline the shared panel.html at build time |
+| `executeAsModal` required for document changes | All export/import wrapped in modal execution context |
+
+**Universal fallback:** The CLI (`tweenforge generate`) works without any host app. Animators can manually export frames, run the CLI, and import results.
 
 ---
 
 ## Data Flow
 
-### Native Mode — Step by Step
+### Interactive Panel Workflow (Native Mode)
 
 ```
-1. User draws Key Frame A (frame 1) and Key Frame B (frame 5) in CSP
-2. User runs tweenforge.js from Script menu
-3. Script prompts: start frame, end frame, # inbetweens, easing, lineart mode
-4. Script exports frame 1 → ~/.tweenforge/tmp/export_xxx/keyframe_0001.png
-5. Script exports frame 5 → ~/.tweenforge/tmp/export_xxx/keyframe_0005.png
-6. Script POSTs to http://127.0.0.1:9817/interpolate:
-   {
-     "frame_a_path": "~/.tweenforge/tmp/export_xxx/keyframe_0001.png",
-     "frame_b_path": "~/.tweenforge/tmp/export_xxx/keyframe_0005.png",
-     "num_inbetweens": 3,
-     "easing": "ease_in_out",
-     "lineart_mode": true,
-     "output_dir": "~/.tweenforge/tmp/output_xxx/"
-   }
-7. Server loads both PNGs, runs RIFE at t=0.25, t=0.5, t=0.75
-8. Server applies line art post-processing (binarize + denoise)
-9. Server writes inbetween_000.png, inbetween_001.png, inbetween_002.png
-10. Server responds with { "status": "complete", "frames": [...paths...] }
-11. Script imports each PNG into CSP timeline at frames 2, 3, 4
-12. Animator reviews and touches up as needed
+1. Animator opens TweenForge panel in CSP/Photoshop
+2. Panel checks server health → shows green/red connection dot
+3. Animator types start frame (1) and end frame (5) in the panel
+4. Animator sets: 3 inbetweens, ease-in-out, lineart cleanup ON
+5. Animator clicks "Generate Preview"
+6. Panel calls HostBridge.exportFrame() for frames 1 and 5
+   → Adapter exports to ~/.tweenforge/tmp/export_xxx/
+7. Panel POSTs to /interpolate/preview with paths + settings
+8. Server generates 3 frames, creates thumbnails, writes full-res PNGs
+9. Server responds with thumbnail base64 data + file paths
+10. Panel renders preview strip: [Key A] [tw 1] [tw 2] [tw 3] [Key B]
+11. Animator clicks play → frames loop at 8fps to judge motion
+12. If bad: animator adjusts settings → click "Generate Preview" again → goto 7
+13. If good: animator clicks "Import to Timeline"
+14. Panel calls HostBridge.importFrame() for each generated frame
+15. Frames appear in the host app's timeline at positions 2, 3, 4
 ```
 
-### Cloud Mode — Step by Step
+### Cloud Mode
 
-```
-1-3. Same as native
-4-5. Script reads frame PNGs into memory (or from temp export)
-6. Script POSTs multipart form to https://api.tweenforge.io/interpolate/upload:
-   - frame_a: <binary PNG>
-   - frame_b: <binary PNG>
-   - num_inbetweens: 3
-   - easing: ease_in_out
-   - lineart_mode: true
-7-8. Same processing on the server side
-9. Server responds with base64-encoded PNGs in JSON
-10. Script decodes base64, writes to temp files
-11-12. Same as native
-```
+Same as above, but:
+- Panel uploads frames via `POST /interpolate/upload` instead of file paths
+- Server returns base64 PNGs in the response body
+- Panel writes base64 data to temp files before calling `HostBridge.importFrame()`
 
 ---
 
@@ -250,54 +313,73 @@ Clip Studio Paint's scripting API (v2.x) is still maturing. Known limitations an
 
 ```
 tweenforge/
-├── pyproject.toml              # Project metadata and dependencies
-├── DESIGN.md                   # This file
-├── README.md                   # User-facing documentation
-├── src/tweenforge/
+├── pyproject.toml                  # Project metadata and dependencies
+├── DESIGN.md                       # This file
+├── README.md                       # User-facing documentation
+│
+├── src/tweenforge/                 # Python package
 │   ├── __init__.py
-│   ├── config.py               # Configuration management
-│   ├── cli.py                  # CLI: serve, setup, generate
+│   ├── config.py                   # Configuration management
+│   ├── cli.py                      # CLI: serve, setup, generate
 │   ├── engine/
-│   │   ├── base.py             # Interpolator ABC, easing math, data classes
-│   │   ├── rife.py             # RIFE model wrapper + weight download
-│   │   └── postprocess.py      # Line art cleanup pipeline
+│   │   ├── base.py                 # Interpolator ABC, easing math, data classes
+│   │   ├── rife.py                 # RIFE model wrapper + weight download
+│   │   └── postprocess.py          # Line art cleanup pipeline
 │   ├── server/
-│   │   ├── app.py              # FastAPI — /interpolate, /interpolate/upload, /health
-│   │   └── schemas.py          # Pydantic request/response models
+│   │   ├── app.py                  # FastAPI — /interpolate, /preview, /upload, /health
+│   │   └── schemas.py              # Pydantic request/response models
+│   ├── client/                     # Cross-tool client SDK (Python-side)
+│   │   ├── adapter.py              # HostAdapter ABC — the contract for all host plugins
+│   │   ├── session.py              # Workflow state machine (select→generate→preview→import)
+│   │   └── protocol.py             # Shared data types (GenerateRequest, PreviewResult, etc.)
 │   └── csp/
-│       └── bridge.py           # Generates config JSON for the CSP plugin
-├── csp_plugin/
-│   └── tweenforge.js           # CSP-side JavaScript plugin
+│       └── bridge.py               # Generates config JSON for host plugins
+│
+├── csp_plugin/                     # Clip Studio Paint plugin
+│   ├── tweenforge.js               # CSP HostBridge adapter
+│   └── panel.html                  # Shared UI (HTML/CSS/JS — used by all host plugins)
+│
+├── photoshop_plugin/               # Adobe Photoshop UXP plugin
+│   ├── manifest.json               # UXP plugin manifest
+│   ├── index.js                    # Photoshop HostBridge adapter
+│   └── panel.html                  # Loads the shared panel.html
+│
 ├── docker/
-│   ├── Dockerfile              # Production image with model weights baked in
-│   └── docker-compose.yml      # One-command cloud deployment
+│   ├── Dockerfile                  # Production image with model weights baked in
+│   └── docker-compose.yml          # One-command cloud deployment
+│
 └── tests/
-    ├── conftest.py             # Shared fixtures (sample frames)
-    ├── test_engine.py          # Unit tests for interpolation + post-processing
-    └── test_server.py          # Integration tests for API endpoints
+    ├── conftest.py                 # Shared fixtures (sample frames)
+    ├── test_engine.py              # Unit tests for interpolation + post-processing
+    └── test_server.py              # Integration tests for API endpoints
 ```
 
 ---
 
 ## Future Work
 
+### Done
+- ~~CSP Dialog UI~~ — replaced `prompt()`/`alert()` with HTML panel UI
+- ~~Preview before import~~ — thumbnail strip with inline playback
+- ~~Cross-tool extensibility~~ — HostBridge adapter pattern, Photoshop plugin skeleton
+
 ### Short-term
 - **PyInstaller bundle** — single executable for non-technical users
-- **CSP Dialog UI** — replace `prompt()`/`alert()` with proper dialog panels
 - **Batch mode** — interpolate multiple frame ranges in one request
-- **Onion-skin preview** — show generated frames as semi-transparent overlays before committing
+- **Onion-skin overlay** — semi-transparent generated frames overlaid on the canvas for fine-tuning
+- **Build script** — inline shared panel.html into each host plugin at build time
 
 ### Medium-term
 - **FILM integration** — alternative model for scenes with large motion
 - **Multi-layer support** — process lineart, color, and shading layers independently
 - **Stroke-aware interpolation** — vectorize line art, match strokes between frames, interpolate control points for pixel-perfect lines
 - **Partial region selection** — only interpolate a selected area of the frame
+- **After Effects / Krita adapters** — additional host plugins using the same HostBridge pattern
 
 ### Long-term
 - **Custom-trained model** — fine-tune on animation inbetween datasets (AnimeInterp, ATD-12K)
 - **Topology-aware generation** — handle mouth shapes, eye blinks, hair physics
 - **Style consistency** — maintain the artist's specific line quality and hatching patterns
-- **Real-time preview** — generate low-res previews instantly, refine on demand
 
 ---
 

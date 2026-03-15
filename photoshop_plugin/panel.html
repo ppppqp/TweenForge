@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TweenForge</title>
+<style>
+  /* UXP panels inherit Photoshop's Spectrum CSS theme.
+     We add only the overrides needed for the panel.html include. */
+  body { padding: 0; margin: 0; }
+</style>
+</head>
+<body id="tweenforge-root">
+  <!--
+    In production, this file would embed the shared panel.html via an iframe
+    or inline include. For UXP, we inline it directly since UXP doesn't
+    support iframes. Copy the content from csp_plugin/panel.html here.
+
+    The shared panel.html is the single source of truth for the UI.
+    Both CSP and Photoshop adapters inject their HostBridge before
+    the panel script runs, so the same UI code works in both hosts.
+
+    Build step: a simple script copies csp_plugin/panel.html content
+    into this file at build time, replacing this comment block.
+  -->
+  <script>
+    // Load the shared panel inline
+    fetch("../csp_plugin/panel.html")
+      .then(r => r.text())
+      .then(html => {
+        document.getElementById("tweenforge-root").innerHTML = html;
+      })
+      .catch(() => {
+        document.getElementById("tweenforge-root").innerHTML =
+          "<p style='padding:12px;color:#ccc;'>Failed to load panel UI. " +
+          "Ensure the plugin folder structure is intact.</p>";
+      });
+  </script>
+</body>
+</html>

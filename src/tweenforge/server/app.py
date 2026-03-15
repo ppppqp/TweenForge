@@ -1,7 +1,8 @@
 """FastAPI server — serves both native (local file-path) and cloud (upload) modes.
 
-Native mode:  POST /interpolate        — reads/writes files on disk
-Cloud mode:   POST /interpolate/upload  — accepts multipart uploads, returns base64 PNGs
+Native mode:  POST /interpolate          — reads/writes files on disk
+              POST /interpolate/preview   — same but returns thumbnails for UI preview
+Cloud mode:   POST /interpolate/upload    — accepts multipart uploads, returns base64 PNGs
 Health:       GET  /health
 """
 
@@ -27,6 +28,9 @@ from tweenforge.server.schemas import (
     HealthResponse,
     InterpolateRequest,
     InterpolateResponse,
+    PreviewFrameInfo,
+    PreviewRequest,
+    PreviewResponse,
     UploadInterpolateResponse,
 )
 
@@ -73,6 +77,16 @@ def _save_image(arr: np.ndarray, path: Path) -> None:
     Image.fromarray(arr).save(path)
 
 
+def _make_thumbnail_b64(img: Image.Image | np.ndarray, size: int = 192) -> str:
+    if isinstance(img, np.ndarray):
+        img = Image.fromarray(img)
+    img = img.copy()
+    img.thumbnail((size, size), Image.Resampling.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
 def _to_engine_easing(e: EasingType) -> EngineEasing:
     return EngineEasing(e.value)
 
@@ -110,11 +124,68 @@ async def interpolate_native(req: InterpolateRequest):
             _save_image(frame, p)
             paths.append(str(p))
 
-        return InterpolateResponse(status="complete", frames=paths)
+        return InterpolateResponse(
+            status="complete", frames=paths, timestamps=result.timestamps,
+        )
 
     except Exception as e:
         logger.exception("Interpolation failed")
         return InterpolateResponse(status="error", error=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Preview endpoint — generates frames AND returns thumbnails for UI
+# ---------------------------------------------------------------------------
+
+@app.post("/interpolate/preview", response_model=PreviewResponse)
+async def interpolate_preview(req: PreviewRequest):
+    try:
+        frame_a = _load_image(req.frame_a_path)
+        frame_b = _load_image(req.frame_b_path)
+
+        # Generate thumbnails of the input key frames
+        thumb_a = _make_thumbnail_b64(frame_a, req.thumbnail_size)
+        thumb_b = _make_thumbnail_b64(frame_b, req.thumbnail_size)
+
+        engine_req = InterpolationRequest(
+            frame_a=frame_a,
+            frame_b=frame_b,
+            num_inbetweens=req.num_inbetweens,
+            easing=_to_engine_easing(req.easing),
+            lineart_mode=req.lineart_mode,
+        )
+
+        result = get_interpolator().interpolate(engine_req)
+        frames = result.frames
+
+        if req.lineart_mode:
+            frames = get_postprocessor().process_batch(frames)
+
+        out_dir = Path(req.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        preview_frames = []
+        for i, frame in enumerate(frames):
+            p = out_dir / f"inbetween_{i:03d}.png"
+            _save_image(frame, p)
+            thumb = _make_thumbnail_b64(frame, req.thumbnail_size)
+            preview_frames.append(PreviewFrameInfo(
+                index=i,
+                timestamp=result.timestamps[i],
+                image_path=str(p),
+                thumbnail_base64=thumb,
+            ))
+
+        return PreviewResponse(
+            status="complete",
+            frames=preview_frames,
+            key_frame_a_thumb=thumb_a,
+            key_frame_b_thumb=thumb_b,
+        )
+
+    except Exception as e:
+        logger.exception("Preview generation failed")
+        return PreviewResponse(status="error", error=str(e))
 
 
 # ---------------------------------------------------------------------------

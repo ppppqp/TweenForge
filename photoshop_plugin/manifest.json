@@ -1,0 +1,30 @@
+{
+    "id": "com.tweenforge.photoshop",
+    "name": "TweenForge",
+    "version": "0.1.0",
+    "main": "index.js",
+    "host": {
+        "app": "PS",
+        "minVersion": "24.0.0"
+    },
+    "manifestVersion": 5,
+    "entrypoints": [
+        {
+            "type": "panel",
+            "id": "tweenforgePanel",
+            "label": {
+                "default": "TweenForge"
+            },
+            "minimumSize": { "width": 260, "height": 400 },
+            "preferredDockedSize": { "width": 280, "height": 500 },
+            "preferredFloatingSize": { "width": 300, "height": 550 },
+            "icons": []
+        }
+    ],
+    "icons": [],
+    "requiredPermissions": {
+        "network": { "domains": ["http://127.0.0.1", "https://*"] },
+        "localFileSystem": "fullAccess",
+        "clipboard": "readAndWrite"
+    }
+}
